@@ -1,24 +1,25 @@
-// Cobalt API integration for URL-based video/audio downloading
-// Uses the open-source cobalt.tools API
+// Video download integration
+// Uses server-side yt-dlp API for reliable multi-platform downloading
 
-const COBALT_API = "https://api.cobalt.tools";
-
-export interface CobaltResponse {
-  status: "redirect" | "tunnel" | "picker" | "error";
-  url?: string;
-  picker?: Array<{
-    type: "video" | "photo";
-    url: string;
-    thumb?: string;
-  }>;
-  text?: string;
-  filename?: string;
+// Resolve API base relative to current page (works both in dev and production)
+function getApiBase(): string {
+  // In dev, the Vite dev server proxies to Express on the same port
+  return "";
 }
 
-export interface DownloadResult {
+export interface DownloadResponse {
+  status: "success";
   url: string;
   filename: string;
+  title: string;
+  thumbnail?: string;
+  duration?: number;
+  resolution?: string;
   type: "video" | "audio";
+}
+
+export interface DownloadError {
+  error: string;
 }
 
 export async function fetchVideoInfo(
@@ -28,34 +29,41 @@ export async function fetchVideoInfo(
     quality?: string;
     format?: string;
   }
-): Promise<CobaltResponse> {
-  const body: Record<string, unknown> = {
-    url: videoUrl,
-    videoQuality: options?.quality || "1080",
-    filenameStyle: "pretty",
-  };
+): Promise<{ status: "success" | "error"; url?: string; filename?: string; title?: string; text?: string }> {
+  const apiBase = getApiBase();
 
-  if (options?.audioOnly) {
-    body.downloadMode = "audio";
-    body.audioFormat = options.format || "mp3";
-  } else {
-    body.downloadMode = "auto";
-  }
-
-  const response = await fetch(`${COBALT_API}`, {
+  const response = await fetch(`${apiBase}/api/download`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      url: videoUrl,
+      quality: options?.quality || "1080",
+      audioOnly: options?.audioOnly || false,
+      audioFormat: options?.format || "mp3",
+    }),
   });
 
+  const data = await response.json();
+
   if (!response.ok) {
-    throw new Error(`API request failed: ${response.status}`);
+    return {
+      status: "error",
+      text: data.error || "Download processing failed. Please check the URL and try again.",
+    };
   }
 
-  return response.json();
+  // Build proxy URL for CORS-safe downloading
+  const proxyUrl = `${apiBase}/api/proxy?url=${encodeURIComponent(data.url)}&filename=${encodeURIComponent(data.filename || "download")}`;
+
+  return {
+    status: "success",
+    url: proxyUrl,
+    filename: data.filename,
+    title: data.title,
+  };
 }
 
 // Supported platforms detection

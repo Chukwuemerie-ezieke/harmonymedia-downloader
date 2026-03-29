@@ -99,17 +99,17 @@ export default function Home() {
         format: audioFormat,
       });
 
-      if (response.status === "redirect" || response.status === "tunnel") {
-        if (response.url) {
-          setResult({ url: response.url, filename: response.filename || undefined });
-          // Auto-open the download
-          window.open(response.url, "_blank", "noopener,noreferrer");
-          toast({ title: "Download started", description: "Your file is being downloaded." });
-        }
-      } else if (response.status === "picker" && response.picker?.length) {
-        setResult({ url: response.picker[0].url, filename: undefined });
-        window.open(response.picker[0].url, "_blank", "noopener,noreferrer");
-        toast({ title: "Download started", description: "Your file is being downloaded." });
+      if (response.status === "success" && response.url) {
+        setResult({ url: response.url, filename: response.filename || undefined });
+        // Trigger download via hidden anchor
+        const a = document.createElement("a");
+        a.href = response.url;
+        a.download = response.filename || "download";
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        toast({ title: "Download started", description: response.title ? `Downloading: ${response.title}` : "Your file is being downloaded." });
       } else if (response.status === "error") {
         setError(response.text || "This video could not be processed. It may be private, region-locked, or from an unsupported platform.");
       } else {
